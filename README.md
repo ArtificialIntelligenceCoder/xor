@@ -18,6 +18,7 @@ This project is a Rust-based encryption and decryption tool that implements a se
   - [Notes on File Types](#notes-on-file-types)
 - [Security Considerations](#security-considerations)
 - [Attack Vectors on XOR and How This Tool Mitigates Them](#attack-vectors-on-xor-and-how-this-tool-mitigates-them)
+- [Considerations for Executable Files](#considerations-for-executable-files)
 - [License](#license)
 
 ## Overview
@@ -154,6 +155,12 @@ Basic XOR encryption provides no integrity checks, making it possible for an att
 
 **Mitigation in This Tool**:
 - The use of HMAC-SHA256 for integrity verification ensures that any modification to the ciphertext, nonce, or any part of the data will be detected during decryption. The decryption process verifies the HMAC tag, and if verification fails, the tool will exit, preventing tampered data from being processed.
+
+## Considerations for Executable Files
+
+Encryption and decryption operations that prepend and append data can present risks when dealing with executable files. Even a single byte being altered in an executable can render it inoperative or cause unexpected behavior. Since this tool prepends a nonce and appends an HMAC to the output, executable files can be particularly sensitive to such modifications.
+
+**Recommendation**: To safely encrypt executable files, it is advisable to first compress them (e.g., using a tool like `zip`) before encryption. Compression packages the executable into a new format, protecting the internal structure from direct modification during the encryption process. This ensures that, upon decryption, the executable remains intact and fully operational after being extracted from the compressed archive.
 
 ## License
 
