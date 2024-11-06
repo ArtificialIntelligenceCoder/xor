@@ -1,8 +1,6 @@
-use argon2::Argon2;
 use hmac::{Hmac, Mac};
-
-use sha2::Sha256;
 use rand::Rng;
+use sha2::{Digest, Sha256};
 
 use std::env;
 use std::fs::File;
@@ -11,8 +9,8 @@ use std::process;
 
 type HmacSha256 = Hmac<Sha256>;
 
-const NONCE_SIZE: usize = 64; // Increase nonce to 64 bytes for increased entropy
-const MAC_SIZE: usize = 32;   // Size of HMAC-SHA256 output
+const NONCE_SIZE: usize = 16; // 128-bit nonce
+const MAC_SIZE: usize = 32;   // HMAC-SHA256 output size
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -32,7 +30,7 @@ fn main() {
     }
 
     let mut key = Vec::new();
-    if let Err(err) = load_key(&mut key, key_file) {
+    if let Err(err) = load_file(key_file, &mut key) {
         eprintln!("Failed to load key: {}", err);
         process::exit(1);
     }
@@ -52,22 +50,31 @@ fn main() {
     match mode.as_str() {
         "E" => {
             let nonce = generate_random_bytes(NONCE_SIZE);
-            let iv = derive_iv_with_argon2(&nonce, input_data.len());
-            output_data.extend_from_slice(&nonce); // Prepend the nonce to the output
-            xor_encrypt_decrypt_with_iv(&input_data, &key, &iv, &mut output_data);
-            let mac = generate_hmac(&key, &output_data);
-            output_data.extend_from_slice(&mac); // Append HMAC to the output
+            let keystream = generate_keystream(&nonce, input_data.len());
+            output_data.extend_from_slice(&nonce); // Prepend the nonce
+
+            let mut temp_data = Vec::new();
+            xor_with_key_and_keystream(&input_data, &key, &keystream, &mut temp_data);
+            output_data.extend_from_slice(&temp_data);
+
+            let hmac_key = derive_hmac_key(&key);
+            let mac = generate_hmac(&hmac_key, &output_data);
+            output_data.extend_from_slice(&mac); // Append HMAC
         }
         "D" => {
             if input_data.len() < NONCE_SIZE + MAC_SIZE {
                 eprintln!("Invalid input file: missing nonce or MAC.");
                 process::exit(1);
             }
+
             let (nonce, rest) = input_data.split_at(NONCE_SIZE);
-            let (encrypted_data, received_mac) = rest.split_at(rest.len() - MAC_SIZE);
-            let iv = derive_iv_with_argon2(nonce, encrypted_data.len());
-            verify_hmac(&key, &input_data[..input_data.len() - MAC_SIZE], received_mac);
-            xor_encrypt_decrypt_with_iv(encrypted_data, &key, &iv, &mut output_data);
+            let (ciphertext, received_mac) = rest.split_at(rest.len() - MAC_SIZE);
+
+            let hmac_key = derive_hmac_key(&key);
+            verify_hmac(&hmac_key, &input_data[..input_data.len() - MAC_SIZE], received_mac);
+
+            let keystream = generate_keystream(nonce, ciphertext.len());
+            xor_with_key_and_keystream(ciphertext, &key, &keystream, &mut output_data);
         }
         _ => unreachable!(),
     }
@@ -76,12 +83,6 @@ fn main() {
         eprintln!("Failed to save output file: {}", err);
         process::exit(1);
     }
-}
-
-fn load_key(key: &mut Vec<u8>, key_file: &str) -> std::io::Result<()> {
-    let mut file = File::open(key_file)?;
-    file.read_to_end(key)?;
-    Ok(())
 }
 
 fn load_file(filename: &str, buffer: &mut Vec<u8>) -> std::io::Result<()> {
@@ -101,35 +102,54 @@ fn generate_random_bytes(size: usize) -> Vec<u8> {
     (0..size).map(|_| rng.gen::<u8>()).collect()
 }
 
-fn derive_iv_with_argon2(nonce: &[u8], length: usize) -> Vec<u8> {
-    
-    let argon2 = Argon2::default();
-    let mut iv = vec![0u8; length];
-    argon2.hash_password_into(nonce, nonce, &mut iv).expect("Failed to derive IV using Argon2");
-    iv
+fn generate_keystream(nonce: &[u8], length: usize) -> Vec<u8> {
+    let mut keystream = Vec::with_capacity(length);
+    let mut counter = 0u64;
+
+    while keystream.len() < length {
+        let mut hasher = Sha256::new();
+        hasher.update(nonce);
+        hasher.update(&counter.to_be_bytes());
+        let hash_output = hasher.finalize();
+        let chunk = if keystream.len() + hash_output.len() > length {
+            &hash_output[..length - keystream.len()]
+        } else {
+            &hash_output[..]
+        };
+        keystream.extend_from_slice(chunk);
+        counter += 1;
+    }
+
+    keystream
 }
 
-fn xor_encrypt_decrypt_with_iv(input: &[u8], key: &[u8], iv: &[u8], output: &mut Vec<u8>) {
-    if key.len() < input.len() {
-        eprintln!("Key length must be at least as long as the input length.");
-        process::exit(1);
+fn xor_with_key_and_keystream(
+    input: &[u8],
+    key: &[u8],
+    keystream: &[u8],
+    output: &mut Vec<u8>,
+) {
+    for i in 0..input.len() {
+        let byte = input[i] ^ key[i] ^ keystream[i];
+        output.push(byte);
     }
+}
 
-    for (i, &byte) in input.iter().enumerate() {
-        let iv_byte = iv[i];  // Use the full-length IV derived with Argon2
-        let key_byte = key[i];          // Use the key byte-for-byte without repeating
-        output.push(byte ^ key_byte ^ iv_byte);
-    }
+fn derive_hmac_key(key: &[u8]) -> Vec<u8> {
+    // Derive a separate HMAC key from the key file using SHA-256
+    let mut hasher = Sha256::new();
+    hasher.update(key);
+    hasher.finalize().to_vec()
 }
 
 fn generate_hmac(key: &[u8], data: &[u8]) -> Vec<u8> {
-    let mut mac = HmacSha256::new_from_slice(key).expect("Failed to create HMAC");
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
     mac.update(data);
     mac.finalize().into_bytes().to_vec()
 }
 
 fn verify_hmac(key: &[u8], data: &[u8], received_mac: &[u8]) {
-    let mut mac = HmacSha256::new_from_slice(key).expect("Failed to create HMAC");
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
     mac.update(data);
     if mac.verify_slice(received_mac).is_err() {
         eprintln!("MAC verification failed. Data may have been tampered with.");

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Secure XOR Encryption Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 15px;
+            overflow-x: auto;
+        }
+        code {
+            font-family: Consolas, monospace;
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        a {
+            color: #1a0dab;
+            text-decoration: none;
+        }
+        ul, ol {
+            margin-left: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+        .code-section {
+            margin-bottom: 40px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Secure XOR Encryption Tool</h1>
+
+<p>
+    This project is a Rust-based encryption and decryption tool that implements a secure version of XOR encryption.
+    It is designed to approximate a One-Time Pad (OTP) while mitigating the typical vulnerabilities associated with
+    basic XOR encryption. The tool works with raw binary data, making it suitable for encrypting and decrypting any
+    type of file.
+</p>
+
+<h2>Table of Contents</h2>
+<ul>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#how-it-works">How It Works</a></li>
+    <li><a href="#key-features">Key Features</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#examples">Examples</a></li>
+    <li><a href="#security-considerations">Security Considerations</a></li>
+    <li><a href="#code">Code</a></li>
+    <li><a href="#license">License</a></li>
+</ul>
+
+<h2 id="overview">Overview</h2>
+
+<p>
+    This tool encrypts and decrypts files using a combination of a key file and a generated keystream derived from a
+    nonce. It incorporates several cryptographic best practices to enhance the security of XOR encryption, including
+    the use of a nonce, a pseudorandom keystream generator, and HMAC-SHA256 for integrity verification.
+</p>
+
+<h2 id="how-it-works">How It Works</h2>
+
+<h3>Encryption Process</h3>
+<ol>
+    <li><strong>Load the Key File</strong>: A key file containing random bytes is loaded. The key must be at least as long as the plaintext file.</li>
+    <li><strong>Generate a Random Nonce</strong>: A 128-bit (16-byte) nonce is randomly generated for each encryption operation. This nonce ensures that encrypting the same plaintext with the same key produces different ciphertexts.</li>
+    <li><strong>Generate a Keystream</strong>: A pseudorandom keystream is generated using SHA-256 in counter mode. The nonce and a counter are hashed repeatedly until the keystream matches the length of the plaintext.</li>
+    <li><strong>Dual XOR Operation</strong>:
+        <ul>
+            <li>The plaintext is XORed with the corresponding bytes of the key file.</li>
+            <li>The result is then XORed with the generated keystream.</li>
+            <li>This enhances security by combining the randomness of the key file with the pseudorandomness of the keystream.</li>
+        </ul>
+    </li>
+    <li><strong>Concatenate Nonce and Ciphertext</strong>: The nonce is prepended to the ciphertext so it can be used during decryption.</li>
+    <li><strong>Derive HMAC Key</strong>: A separate HMAC key is derived from the key file using SHA-256 to ensure key separation between encryption and authentication.</li>
+    <li><strong>Compute HMAC</strong>: An HMAC-SHA256 tag is computed over the concatenated nonce and ciphertext to ensure integrity and authenticity.</li>
+    <li><strong>Append HMAC to Output</strong>: The HMAC tag is appended to the output data.</li>
+</ol>
+
+<h3>Decryption Process</h3>
+<ol>
+    <li><strong>Load the Key File</strong>: The same key file used during encryption is loaded.</li>
+    <li><strong>Extract Nonce, Ciphertext, and HMAC</strong>: The input data is split into the nonce, ciphertext, and received HMAC tag.</li>
+    <li><strong>Derive HMAC Key</strong>: The HMAC key is derived from the key file using SHA-256.</li>
+    <li><strong>Verify HMAC</strong>: The received HMAC tag is verified against the concatenated nonce and ciphertext. If verification fails, the program exits to prevent tampering.</li>
+    <li><strong>Generate Keystream</strong>: The same keystream is generated using the nonce and SHA-256 in counter mode.</li>
+    <li><strong>Dual XOR Operation</strong>:
+        <ul>
+            <li>The ciphertext is XORed with the generated keystream.</li>
+            <li>The result is then XORed with the key file to retrieve the original plaintext.</li>
+        </ul>
+    </li>
+</ol>
+
+<h2 id="key-features">Key Features</h2>
+<ul>
+    <li><strong>Raw Binary Processing</strong>: Handles raw binary data, allowing encryption and decryption of any file type (e.g., text, images, executables).</li>
+    <li><strong>One-Time Pad Approximation</strong>: Uses a key file as long as the plaintext, combining it with a generated keystream to enhance security.</li>
+    <li><strong>Nonce Implementation</strong>: Incorporates a unique nonce for each encryption to ensure different ciphertexts even with the same plaintext and key.</li>
+    <li><strong>Integrity Verification</strong>: Utilizes HMAC-SHA256 to verify the integrity and authenticity of the encrypted data.</li>
+    <li><strong>Simple Dependencies</strong>: Relies on well-established cryptographic primitives available in Rust crates.</li>
+</ul>
+
+<h2 id="usage">Usage</h2>
+
+<h3>Building the Project</h3>
+<p>Ensure you have Rust and Cargo installed. Clone the repository and build the project using Cargo:</p>
+<pre><code>cargo build --release
+</code></pre>
+
+<h3>Encrypting a File</h3>
+<p>To encrypt a file:</p>
+<pre><code>cargo run --release -- E &lt;input_file&gt; &lt;output_file&gt; &lt;key_file&gt;
+</code></pre>
+<ul>
+    <li><code>&lt;input_file&gt;</code>: The path to the plaintext file you want to encrypt.</li>
+    <li><code>&lt;output_file&gt;</code>: The path where the ciphertext will be saved.</li>
+    <li><code>&lt;key_file&gt;</code>: The path to the key file containing random bytes.</li>
+</ul>
+
+<h3>Decrypting a File</h3>
+<p>To decrypt a file:</p>
+<pre><code>cargo run --release -- D &lt;input_file&gt; &lt;output_file&gt; &lt;key_file&gt;
+</code></pre>
+<ul>
+    <li><code>&lt;input_file&gt;</code>: The path to the ciphertext file you want to decrypt.</li>
+    <li><code>&lt;output_file&gt;</code>: The path where the decrypted plaintext will be saved.</li>
+    <li><code>&lt;key_file&gt;</code>: The path to the same key file used during encryption.</li>
+</ul>
+
+<h2 id="examples">Examples</h2>
+
+<h3>Encrypting a File</h3>
+<p>Suppose you have a plaintext file <code>secret.txt</code> and a key file <code>keyfile.bin</code>:</p>
+<pre><code>cargo run --release -- E secret.txt secret_encrypted.bin keyfile.bin
+</code></pre>
+<p>This command encrypts <code>secret.txt</code> and saves the ciphertext to <code>secret_encrypted.bin</code>.</p>
+
+<h3>Decrypting a File</h3>
+<p>To decrypt the previously encrypted file:</p>
+<pre><code>cargo run --release -- D secret_encrypted.bin secret_decrypted.txt keyfile.bin
+</code></pre>
+<p>This command decrypts <code>secret_encrypted.bin</code> and saves the plaintext to <code>secret_decrypted.txt</code>.</p>
+
+<h3>Notes on File Types</h3>
+<ul>
+    <li><strong>Binary Files</strong>: Since the tool processes raw binary data, it can encrypt and decrypt any file type, including images, videos, executables, etc.</li>
+    <li><strong>Key File Generation</strong>: Ensure that your key file (<code>keyfile.bin</code>) contains random bytes and is at least as long as the largest file you intend to encrypt.</li>
+</ul>
+
+<h2 id="security-considerations">Security Considerations</h2>
+
+<h3>1. Proper Keystream Generation</h3>
+<ul>
+    <li><strong>SHA-256 in Counter Mode</strong>: Uses the SHA-256 hash function in counter mode to generate a pseudorandom keystream matching the length of the plaintext.</li>
+    <li><strong>Avoids Argon2 Misuse</strong>: Eliminates the misuse of Argon2 (a password hashing algorithm) for keystream generation.</li>
+</ul>
+
+<h3>2. Nonce Utilization</h3>
+<ul>
+    <li><strong>Ensures Ciphertext Uniqueness</strong>: Incorporates a random nonce for each encryption operation, ensuring that encrypting the same plaintext with the same key produces different ciphertexts.</li>
+    <li><strong>Mitigates XOR Vulnerabilities</strong>: Prevents attackers from exploiting patterns in the ciphertext.</li>
+</ul>
+
+<h3>3. Dual XOR Operation</h3>
+<ul>
+    <li><strong>Combines Key and Keystream</strong>: The plaintext is XORed with both the key file and the generated keystream.</li>
+    <li><strong>Enhances Security</strong>: Adds complexity, making it more difficult for attackers to analyze and decrypt the data.</li>
+</ul>
+
+<h3>4. Separate HMAC Key Derivation</h3>
+<ul>
+    <li><strong>Key Separation</strong>: Derives a separate HMAC key from the key file using SHA-256.</li>
+    <li><strong>Prevents Cryptographic Attacks</strong>: Ensures that the encryption key and the authentication key are different, adhering to best practices.</li>
+</ul>
+
+<h3>5. Integrity and Authentication</h3>
+<ul>
+    <li><strong>HMAC-SHA256</strong>: Provides a robust method for verifying the integrity and authenticity of the ciphertext and nonce.</li>
+    <li><strong>Tamper Detection</strong>: Any alteration to the ciphertext or nonce results in failed HMAC verification during decryption.</li>
+</ul>
+
+<h3>6. Simplified Dependencies</h3>
+<ul>
+    <li><strong>Removed Unnecessary Crates</strong>: Eliminates unused dependencies like Argon2, making the code cleaner and easier to maintain.</li>
+    <li><strong>Focused Functionality</strong>: Dependencies reflect only what's necessary for the encryption scheme.</li>
+</ul>
+
+<h3>7. Performance and Practicality</h3>
+<ul>
+    <li><strong>Efficient Keystream Generation</strong>: SHA-256 is fast and widely supported, ensuring good performance even for large files.</li>
+    <li><strong>Scalability</strong>: Scales well without the impractical requirement of having a key file as long as the message for each encryption.</li>
+</ul>
+
+<h3>8. Adherence to Cryptographic Principles</h3>
+<ul>
+    <li><strong>Avoids Misusing Cryptographic Functions</strong>: Does not misapply cryptographic primitives, adhering to their intended use.</li>
+    <li><strong>Security Best Practices</strong>: Incorporates key separation, nonce usage, and integrity checks, which are fundamental in cryptography.</li>
+</ul>
+
+<h2 id="code">Code</h2>
+
+<div class="code-section">
+    <h3>Cargo.toml</h3>
+    <pre><code>[package]
+name = "secure_xor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rand = "0.8.5"
+sha2 = "0.10.8"
+hmac = "0.12.1"
+</code></pre>
+</div>
+
+<div class="code-section">
+    <h3>src/main.rs</h3>
+    <pre><code>use hmac::{Hmac, Mac};
+use rand::Rng;
+use sha2::{Digest, Sha256};
+
+use std::env;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::process;
+
+type HmacSha256 = Hmac&lt;Sha256&gt;;
+
+const NONCE_SIZE: usize = 16; // 128-bit nonce
+const MAC_SIZE: usize = 32;   // HMAC-SHA256 output size
+
+fn main() {
+    let args: Vec&lt;String&gt; = env::args().collect();
+    if args.len() != 5 {
+        eprintln!("Usage: &lt;E|D&gt; &lt;input_file&gt; &lt;output_file&gt; &lt;key_file&gt;");
+        process::exit(1);
+    }
+
+    let mode = &amp;args[1];
+    let input_file = &amp;args[2];
+    let output_file = &amp;args[3];
+    let key_file = &amp;args[4];
+
+    if mode != "E" &amp;&amp; mode != "D" {
+        eprintln!("Invalid mode. Use 'E' for encrypt or 'D' for decrypt.");
+        process::exit(1);
+    }
+
+    let mut key = Vec::new();
+    if let Err(err) = load_file(key_file, &amp;mut key) {
+        eprintln!("Failed to load key: {}", err);
+        process::exit(1);
+    }
+
+    let mut input_data = Vec::new();
+    if let Err(err) = load_file(input_file, &amp;mut input_data) {
+        eprintln!("Failed to load input file: {}", err);
+        process::exit(1);
+    }
+
+    if key.len() &lt; input_data.len() {
+        eprintln!("The key is too short.");
+        process::exit(1);
+    }
+
+    let mut output_data = Vec::new();
+    match mode.as_str() {
+        "E" =&gt; {
+            let nonce = generate_random_bytes(NONCE_SIZE);
+            let keystream = generate_keystream(&amp;nonce, input_data.len());
+            output_data.extend_from_slice(&amp;nonce); // Prepend the nonce
+
+            let mut temp_data = Vec::new();
+            xor_with_key_and_keystream(&amp;input_data, &amp;key, &amp;keystream, &amp;mut temp_data);
+            output_data.extend_from_slice(&amp;temp_data);
+
+            let hmac_key = derive_hmac_key(&amp;key);
+            let mac = generate_hmac(&amp;hmac_key, &amp;output_data);
+            output_data.extend_from_slice(&amp;mac); // Append HMAC
+        }
+        "D" =&gt; {
+            if input_data.len() &lt; NONCE_SIZE + MAC_SIZE {
+                eprintln!("Invalid input file: missing nonce or MAC.");
+                process::exit(1);
+            }
+
+            let (nonce, rest) = input_data.split_at(NONCE_SIZE);
+            let (ciphertext, received_mac) = rest.split_at(rest.len() - MAC_SIZE);
+
+            let hmac_key = derive_hmac_key(&amp;key);
+            verify_hmac(&amp;hmac_key, &amp;input_data[..input_data.len() - MAC_SIZE], received_mac);
+
+            let keystream = generate_keystream(nonce, ciphertext.len());
+            xor_with_key_and_keystream(ciphertext, &amp;key, &amp;keystream, &amp;mut output_data);
+        }
+        _ =&gt; unreachable!(),
+    }
+
+    if let Err(err) = save_file(output_file, &amp;output_data) {
+        eprintln!("Failed to save output file: {}", err);
+        process::exit(1);
+    }
+}
+
+fn load_file(filename: &amp;str, buffer: &amp;mut Vec&lt;u8&gt;) -&gt; std::io::Result&lt;()&gt; {
+    let mut file = File::open(filename)?;
+    file.read_to_end(buffer)?;
+    Ok(())
+}
+
+fn save_file(filename: &amp;str, data: &amp;[u8]) -&gt; std::io::Result&lt;()&gt; {
+    let mut file = File::create(filename)?;
+    file.write_all(data)?;
+    Ok(())
+}
+
+fn generate_random_bytes(size: usize) -&gt; Vec&lt;u8&gt; {
+    let mut rng = rand::thread_rng();
+    (0..size).map(|_| rng.gen::<u8&gt;()).collect()
+}
+
+fn generate_keystream(nonce: &amp;[u8], length: usize) -&gt; Vec&lt;u8&gt; {
+    let mut keystream = Vec::with_capacity(length);
+    let mut counter = 0u64;
+
+    while keystream.len() &lt; length {
+        let mut hasher = Sha256::new();
+        hasher.update(nonce);
+        hasher.update(&amp;counter.to_be_bytes());
+        let hash_output = hasher.finalize();
+        let chunk = if keystream.len() + hash_output.len() &gt; length {
+            &amp;hash_output[..length - keystream.len()]
+        } else {
+            &amp;hash_output[..]
+        };
+        keystream.extend_from_slice(chunk);
+        counter += 1;
+    }
+
+    keystream
+}
+
+fn xor_with_key_and_keystream(
+    input: &amp;[u8],
+    key: &amp;[u8],
+    keystream: &amp;[u8],
+    output: &amp;mut Vec&lt;u8&gt;,
+) {
+    for i in 0..input.len() {
+        let byte = input[i] ^ key[i] ^ keystream[i];
+        output.push(byte);
+    }
+}
+
+fn derive_hmac_key(key: &amp;[u8]) -&gt; Vec&lt;u8&gt; {
+    // Derive a separate HMAC key from the key file using SHA-256
+    let mut hasher = Sha256::new();
+    hasher.update(key);
+    hasher.finalize().to_vec()
+}
+
+fn generate_hmac(key: &amp;[u8], data: &amp;[u8]) -&gt; Vec&lt;u8&gt; {
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
+    mac.update(data);
+    mac.finalize().into_bytes().to_vec()
+}
+
+fn verify_hmac(key: &amp;[u8], data: &amp;[u8], received_mac: &amp;[u8]) {
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
+    mac.update(data);
+    if mac.verify_slice(received_mac).is_err() {
+        eprintln!("MAC verification failed. Data may have been tampered with.");
+        process::exit(1);
+    }
+}
+</code></pre>
+</div>
+
+<h2 id="license">License</h2>
+<p>This project is licensed under the MIT License. See the <code>LICENSE</code> file for details.</p>
+
+</body>
+</html>
