@@ -1,6 +1,6 @@
 # XOR Encryption CLI Application - README
 
-## Overview
+## Overview version 001
 This application is a Command Line Interface (CLI) tool for **XOR-based file encryption**. It uses several cryptographic techniques to enhance the security of traditional XOR encryption and ensure data integrity. The app provides encryption and decryption capabilities for any type of file, including binary files such as executables.
 
 The app relies on:
