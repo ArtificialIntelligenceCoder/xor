@@ -5,6 +5,7 @@ use sha2::{Digest, Sha256};
 use std::env;
 use std::fs::File;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::process;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -29,6 +30,15 @@ fn main() {
         process::exit(1);
     }
 
+    // Prevent overwriting the key file
+    if file_exists(output_file) {
+        eprintln!(
+            "Output file '{}' already exists. Aborting to prevent overwrite.",
+            output_file
+        );
+        process::exit(1);
+    }
+
     let mut key = Vec::new();
     if let Err(err) = load_file(key_file, &mut key) {
         eprintln!("Failed to load key: {}", err);
@@ -41,7 +51,9 @@ fn main() {
         process::exit(1);
     }
 
-    if key.len() < input_data.len() {
+    // Adjust key length validation based on mode
+    if (mode == "E" && key.len() < input_data.len()) ||
+       (mode == "D" && key.len() < input_data.len().saturating_sub(NONCE_SIZE + MAC_SIZE)) {
         eprintln!("The key is too short.");
         process::exit(1);
     }
@@ -155,4 +167,9 @@ fn verify_hmac(key: &[u8], data: &[u8], received_mac: &[u8]) {
         eprintln!("MAC verification failed. Data may have been tampered with.");
         process::exit(1);
     }
+}
+
+// Added Function to Check if a File Exists
+fn file_exists(filename: &str) -> bool {
+    Path::new(filename).exists()
 }
