@@ -28,7 +28,7 @@ This tool encrypts and decrypts files using a combination of a key file and a ge
 ## How It Works
 
 ### Encryption Process
-1. **Load the Key File**: A key file containing random bytes is loaded. The key must be at least as long as the plaintext file.
+1. **Load the Key File**: A key file containing random bytes is loaded. The key must be at least as long as the plaintext file. You make your own key file- and used properly it has the potential of being a true One TIme Pad- unbreakable in theory- so far nothing has cracked a true one time pad. 
 2. **Generate a Random Nonce**: A 128-bit (16-byte) nonce is randomly generated for each encryption operation, ensuring unique ciphertexts for identical plaintexts.
 3. **Generate a Keystream**: A pseudorandom keystream is generated using SHA-256 in counter mode until the length matches the plaintext.
 4. **Dual XOR Operation**:
