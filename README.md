@@ -65,7 +65,7 @@ cargo build --release
 ### Encrypting a File
 To encrypt a file:
 ```sh
-cargo run --release -- E <input_file> <output_file> <key_file>
+./xor E <input_file> <output_file> <key_file>
 ```
 - `<input_file>`: The path to the plaintext file you want to encrypt.
 - `<output_file>`: The path where the ciphertext will be saved.
@@ -74,7 +74,7 @@ cargo run --release -- E <input_file> <output_file> <key_file>
 ### Decrypting a File
 To decrypt a file:
 ```sh
-cargo run --release -- D <input_file> <output_file> <key_file>
+./xor D <input_file> <output_file> <key_file>
 ```
 - `<input_file>`: The path to the ciphertext file you want to decrypt.
 - `<output_file>`: The path where the decrypted plaintext will be saved.
@@ -85,14 +85,14 @@ cargo run --release -- D <input_file> <output_file> <key_file>
 ### Encrypting a File Example
 Suppose you have a plaintext file `secret.txt` and a key file `keyfile.bin`:
 ```sh
-cargo run --release -- E secret.txt secret_encrypted.bin keyfile.bin
+./xor E secret.txt secret_encrypted.bin keyfile.bin
 ```
 This command encrypts `secret.txt` and saves the ciphertext to `secret_encrypted.bin`.
 
 ### Decrypting a File Example
 To decrypt the previously encrypted file:
 ```sh
-cargo run --release -- D secret_encrypted.bin secret_decrypted.txt keyfile.bin
+./xor D secret_encrypted.bin secret_decrypted.txt keyfile.bin
 ```
 This command decrypts `secret_encrypted.bin` and saves the plaintext to `secret_decrypted.txt`.
 
